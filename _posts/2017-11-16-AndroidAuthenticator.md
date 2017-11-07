@@ -3,62 +3,101 @@ layout: post
 title: On Android Authenticator
 ---
 
-## Add account
+本文简单介绍下Android account及其相关的类， 用户登录account的主要过程.
 
-### The first thing you'll need is a way to get credentials from the user.
-  * Collects credentials from the user 获取用户证书，比如用户名、密码
-  * Authenticates the credentials with the server 与服务器的交互及验证
-  * Stores the credentials on the device  在设备上存储证书， 即创建账号.
-the Android framework supplies a base class, AccountAuthenticatorActivity, which you can extend to create your own custom authenticator.
-通常可以通过继承AccountAuthenticatorActivity定制authenticator.
+## Android account
 
-    The third requirement has a canonical, and rather simple, implementation:
-第三步的典型代码范式如下
-final Account account = new Account(mUsername, your_account_type);
-mAccountManager.addAccountExplicitly(account, mPassword, null);
+Android 中的account即用户账号， 与我们通常理解的网络账号无异， 比如Gmail account, facebook account.对于某类服务比如Gmail， 用户需要自己的账号去登录， 保存自己的数据。
 
-### Be Smart About Security!
- * AccountManager 用明文保存密码，所以需要考虑安全问题. 通常用Auth-token的方式解决.
- 
-### Extend AbstractAccountAuthenticator
-In order for the AccountManager to work with your custom account code, you need a class that implements the interfaces that AccountManager expects. This class is the authenticator class.
+## 主要概念
 
-The easiest way to create an authenticator class is to extend AbstractAccountAuthenticator and implement its abstract methods.
+- credentials 用户证书， 比如用户名，密码
 
-You can find a step-by-step guide to implementing a successful authenticator class and the XML files in the AbstractAccountAuthenticator documentation. There's also a sample implementation in the SampleSyncAdapter sample app.
+- Auth-token
 
-### Create an Authenticator Service 作用？？
+  Authentication Token -  服务器提供的临时访问token.  用户需要在登录服务器之后获取这个token， 在之后发送给服务器的request中需要附加这个token.
 
+## 用户登录过程涉及到的Android类
 
-### account manager
-Pros: Standard way to authenticate users. Simplifies the process for the developer. Handles access-denied scenarios for you. Can handle multiple token types for a single account (e.g. Read-only vs. Full-access). Easily shares auth-tokens between apps. Great support for background processes such as SyncAdapters. Plus, you get a cool entry for your account type on the phone’s settings.
+- AccountManager
 
-#### Auth-token
-Authentication Token (auth-token) -  A temporary access token (or security-token) given by the server. The user needs to identify to get such token and attach it to every request he sends to the server.
+  Android framework层的类
 
-#### AccountAuthenticator 
-- A module to handle a specific account type. The AccountManager find the appropriate AccountAuthenticator talks with it to perform all the actions on the account type. The AccountAuthenticator knows which activity to show the user for entering his credentials and where to find any stored auth-token that the server has returned previously. 
+- AccountAuthenticator
 
-#### AccountAuthenticatorActivity 
-- Base class for the “sign-in/create account” activity to be called by the authenticator when the user needs to identify himself. The activity is in charge of the sign-in or account creation process against the server and return an auth-token back to the calling authenticator.
+  app需要实现的类， 用于从服务器获取token等. 会被AccountManager调用.
 
-#### App登录过程
-  * app首次登录， 调用AccountManager获取 authToken.
-  * AccountManager查询 AccountAuthenticator是否可以获得authToken
-  * 因为首次登录还没有获取过authToken, 所以启动AccountAuthenticatorActivity, 提示用户登录账号
-  * 用户登录， 获得server返回的 authToken
-  * AccountManager存储authToken供将来使用
-  * app得到了authToken
+- AccountAuthenticatorActivity
 
-### Creating our Authenticator
-  * addAccount 
-Called when the user wants to log-in and add a new account to the device.
-可以从app本身或settings app调用 AccountManager#addAccount()
+  与用户的交互activity， 比如用于提示用户输入用户名、密码进行登录.
 
-### getAuthToken
+## App登录过程
 
-### Service
-将Authenticator信息暴露给系统
-All we want to do, is letting other processes bind with our service and communicate with our Authenticator.
+- app首次登录， 调用AccountManager获取 authToken.
+- AccountManager查询 AccountAuthenticator是否可以获得authToken
+- 因为首次登录还没有获取过authToken, 所以启动AccountAuthenticatorActivity, 提示用户登录账号
+- 用户登录， 获得server返回的 authToken
+- AccountManager存储authToken供将来使用
+- app得到了authToken
+
+## 如何实现Authenticator
+
+- 在AndroidManifest.xml中声明service
+
+  ```
+  <service android:name=".authentication.TestAuthenticatorService">
+      <intent-filter>
+          <action android:name="android.accounts.AccountAuthenticator" />
+      </intent-filter>
+      <meta-data android:name="android.accounts.AccountAuthenticator"
+                 android:resource="@xml/authenticator" />
+  </service>
+  ```
+
+- 定义service
+
+  ```
+  public class TestAuthenticatorService extends Service {
+      @Override
+      public IBinder onBind(Intent intent) {
+          TestAuthenticator authenticator = new TestAuthenticator(this);
+          return authenticator.getIBinder();
+      }
+  }
+  ```
+
+- 实现Authenticator
+
+  继承 [*AbstractAccountAuthenticator*](http://developer.android.com/reference/android/accounts/AbstractAccountAuthenticator.html) 并实现该类的关键方法如addAccount(), getAuthToken()等.
+
+- 创建交互Activity
+
+  ```
+  private void finishLogin(Intent intent) {
+      String accountName = intent.getStringExtra(AccountManager.KEY_ACCOUNT_NAME);
+      String accountPassword = intent.getStringExtra(PARAM_USER_PASS);
+      final Account account = new Account(accountName, intent.getStringExtra(AccountManager.KEY_ACCOUNT_TYPE));
+      if (getIntent().getBooleanExtra(ARG_IS_ADDING_NEW_ACCOUNT, false)) {
+          String authtoken = intent.getStringExtra(AccountManager.KEY_AUTHTOKEN);
+          String authtokenType = mAuthTokenType;
+          // Creating the account on the device and setting the auth token we got
+          // (Not setting the auth token will cause another call to the server to authenticate the user)
+          mAccountManager.addAccountExplicitly(account, accountPassword, null);
+          mAccountManager.setAuthToken(account, authtokenType, authtoken);
+      } else {
+          mAccountManager.setPassword(account, accountPassword);
+      }
+      setAccountAuthenticatorResult(intent.getExtras());
+      setResult(RESULT_OK, intent);
+      finish();
+  }
+  ```
+
+  ​
+
+## Reference
+
+http://blog.udinic.com/2013/04/24/write-your-own-android-authenticator
+
 
 
