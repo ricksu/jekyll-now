@@ -32,6 +32,7 @@ Android 中的account即用户账号， 与我们通常理解的网络账号无�
   与用户的交互activity， 比如用于提示用户输入用户名、密码进行登录.
 
 ## App登录过程
+![classes relation](/images/accountmanager.png "classes relation")
 
 - app首次登录， 调用AccountManager获取 authToken.
 - AccountManager查询 AccountAuthenticator是否可以获得authToken
