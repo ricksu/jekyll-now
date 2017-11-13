@@ -1,6 +1,6 @@
 ---
 layout: post
-title: Android子串资源更新问题
+title: Android字串资源更新问题
 ---
 ## 问题描述
 
