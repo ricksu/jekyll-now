@@ -1,5 +1,3 @@
-# PowerManageService简析 (1st edition)
-
 ## PowerManager概述
 
 PowerManager开放API对设备的电源使用进行控制. 对Power的控制会极大的影响设备的电池使用时间, 所以对PowerManager的使用必须谨慎. <br> PowerManager主要是通过wakelock对电源及CPU使用进行控制. 应该只在必须的情况下才申请wakelock， 而且应该尽早释放.
